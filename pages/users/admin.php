@@ -1,6 +1,7 @@
 <?php
 require_once "../auth.php";
 adminOnly();
+
 require_once '../../config.php'; // your DB connection file
 
 // Redirect if not logged in

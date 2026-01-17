@@ -18,3 +18,13 @@ function adminOnly() {
         exit();
     }
 }
+
+/* EventManager-only access */
+function eventManagerOnly() {
+    checkLogin();
+
+    if (!isset($_SESSION['role']) || strtolower($_SESSION['role']) !== 'event manager') {
+        header("Location: home.php");
+        exit();
+    }
+}

@@ -1,11 +1,11 @@
 <?php
-//session_start();
 require_once "../auth.php";
-require_once '../../config.php'; // your DB connection file
+eventManagerOnly(); // Make sure this function exists in auth.php
 
+require_once '../../config.php'; // Database connection
 
 // Redirect if not logged in or not admin
-if (!isset($_SESSION['username']) || $_SESSION['role'] != 'Admin') {
+if (!isset($_SESSION['username']) || $_SESSION['role'] != 'Event Manager') {
     header("Location: ../login.php");
     exit();
 }
@@ -13,16 +13,28 @@ if (!isset($_SESSION['username']) || $_SESSION['role'] != 'Admin') {
 $current_user = $_SESSION['username'];
 
 // Fetch all users with roles
-$sql = "
-    SELECT e.Id, e.Code, e.Title, e.Type_Id, e.Venue, e.City, e.Date, e.Start_Time, e.End_Time, e.Status_Id, s.Status_Type, t.Type
-    FROM event e
-    LEFT JOIN event_type t ON e.Type_Id = t.Type_Id
-    LEFT JOIN event_status s ON e.Status_Id = s.Status_Id
-    ORDER BY e.Id
-";
+$sql = "SELECT e.Id, e.Code, e.Title, e.Type_Id, e.Venue, e.City, e.Date, e.Start_Time, e.End_Time, e.Status_Id, s.Status_Type, t.Type
+        FROM event e
+        LEFT JOIN event_type t ON e.Type_Id = t.Type_Id
+        LEFT JOIN event_status s ON e.Status_Id = s.Status_Id";
 $result = $conn->query($sql);
 if (!$result) {
     die("Query failed: " . $conn->error);
+}
+
+// Fetch roles for dropdown
+$eventtype_sql = "SELECT * FROM event_type";
+$eventtype_result = $conn->query($eventtype_sql);
+$eventtype = array();     
+while ($row = $eventtype_result->fetch_assoc()) {
+    $eventtype[$row['Type_Id']] = $row['Type'];
+}
+
+$eventstatus_sql = "SELECT * FROM event_status";
+$eventstatus_result = $conn->query($eventstatus_sql);
+$eventstatus = array();     
+while ($row = $eventstatus_result->fetch_assoc()) {
+    $eventstatus[$row['Status_Id']] = $row['Status_Type'];
 }
 
 ?>
@@ -32,84 +44,85 @@ if (!$result) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Panel</title>
-<link rel="stylesheet" href="../css/style.css">
-<style>
-    body { font-family: Arial, sans-serif; }
-    .header-section { display: flex; justify-content: space-between; align-items: center; padding: 10px 20px; background: #f2f2f2; }
-    .nav-link { text-decoration: none; margin-right: 10px; }
-    .table-section { margin: 20px; }
-    table { width: 100%; border-collapse: collapse; }
-    th, td { border: 1px solid #333; padding: 10px; text-align: center; }
-    th { background: #eee; }
-    .reg-btn, .view-btn, .upt-btn, .del-btn { padding: 5px 10px; margin: 2px; cursor: pointer; }
-</style>
+<title>Events Panel</title>
+<link rel="stylesheet" href="../../css/style.css">
 </head>
-<body>
+
+<body class="page-layout">
 
 <header class="header-section">
     <nav class="nav-left">
-        <a href="home.php" class="nav-link active">&#8962; Home</a>
+        <a href="../home.php" class="nav-link active">
+            <span class="icon">&#8962;</span> Home
+        </a>
     </nav>
+
     <div class="nav-center">
-        <h2>Events</h2>
+        <h2>EVENTS </h2>
     </div>
+
     <div class="nav-right">
-        <span class="user-display">&#128100; Welcome, <strong><?php echo htmlspecialchars($current_user); ?></strong></span>
+        <span class="user-display">
+            <span class="icon">&#128100;</span> Welcome, <strong><?php echo htmlspecialchars($current_user); ?></strong>
+        </span>
         <span class="nav-divider">|</span>
-        <a href="logout.php" class="logout-link">Logout &#10150;</a>
+        <a href="logout.php" class="logout-link">
+            Logout <span class="icon">&#10150;</span>
+        </a>
     </div>
 </header>
 
-<div class="action-section" style="margin:20px;">
-    <a href="users/createUser.php" style="text-decoration:none;">
-        <button class="reg-btn"> Add New Event</button>
-    </a>
+ <!-- Create Event Button & EventType and EventStatus Buttons -->
+<div class="action-section">
+    <div class="button-wrapper">
+        <button class="reg-btn" onclick="location.href='createEventType.php'">Create New Event Type</button>
+        <button class="reg-btn" onclick="location.href='createEventStatus.php'">Create New Event Status</button>
+        <button class="reg-btn" onclick="location.href='createEvent.php'">Create New Event</button>        
+    </div>
 </div>
 
+
+    <!-- Table View -->
 <div class="table-section">
     <div class="table-container">
         <table>
             <thead>
                 <tr>
-                    <th>Event</th>
-                    <th>City</th>
-                    <th>Event</th>
-                    <th>City</th>
-                    <th>Event</th>
-                    <th>City</th>
+                    <th>Code</th>
+                    <th>Title</th>
+                    <th>Type</th>
+                    <th>Venue</th>
+                    <th>Date</th>
+                    <th>StartTime</th>
+                    <th>EndTime</th>
+                    <th>StatusType</th>
                     <th>Actions</th>
                 </tr>
             </thead>
             <tbody>
-                <?php if ($result->num_rows > 0): ?>
-                    <?php while ($user = $result->fetch_assoc()): ?>
+                    <?php while ($event = $result->fetch_assoc()): ?>
                         <?php
-                            $event_Title = isset($event['Title']) ? intval($event['Title']) : 'No Event Title';
-                            $event_City = isset($event['City']) ? $event['City'] : 'No City';
+                           // Ensure Type_Id and Status_Id are always defined
+                            $event_type_id = isset($event['Type_Id']) ? intval($event['Type_Id']) : 0;
+                            $event_status_id = isset($event['Status_Id']) ? intval($event['Status_Id']) : 0;
                         ?>
-                        <tr>
-                            <td><?php echo htmlspecialchars($user['username']); ?></td>
+                <tr class="cell-record-row">
+                <td><?php echo isset($event['Code']) ? htmlspecialchars($event['Code']) : ''; ?></td>
+                <td><?php echo isset($event['Title']) ? htmlspecialchars($event['Title']) : ''; ?></td>
+                <td><?php echo isset($event['Type']) ? htmlspecialchars($event['Type']) : ''; ?></td>
+                <td><?php echo isset($event['Venue']) ? htmlspecialchars($event['Venue']) : ''; ?></td>
+                <td><?php echo isset($event['Date']) ? htmlspecialchars($event['Date']) : ''; ?></td>
+                <td><?php echo isset($event['Start_Time']) ? htmlspecialchars($event['Start_Time']) : ''; ?></td>
+                <td><?php echo isset($event['End_Time']) ? htmlspecialchars($event['End_Time']) : ''; ?></td>
+                <td><?php echo isset($event['Status_Type']) ? htmlspecialchars($event['Status_Type']) : ''; ?></td>
+                
                             <td>
-                                <select class="drop-down" disabled>
-                                    <option value="0" <?php echo ($user_role_id == 0) ? 'selected' : ''; ?>>No Role</option>
-                                    <?php foreach ($roles as $id => $role_name_option): ?>
-                                        <option value="<?php echo intval($id); ?>" <?php echo ($user_role_id == intval($id)) ? 'selected' : ''; ?>>
-                                            <?php echo htmlspecialchars($role_name_option); ?>
-                                        </option>
-                                    <?php endforeach; ?>
-                                </select>
-                            </td>
-                            <td>
-                                <button class="view-btn" onclick="location.href='events/viewEvent.php?id=<?php echo $user['id']; ?>'">View</button>
-                                <button class="upt-btn" onclick="location.href='events/updateEvent.php?id=<?php echo $user['id']; ?>'">Update</button>
-                                <button class="del-btn" onclick="if(confirm('Are you sure you want to delete this Event?')) location.href='event/deleteEvent.php?id=<?php echo $user['id']; ?>'">Delete</button>
+                                <button class="view-btn" onclick="location.href='viewEvent.php?Id=<?php echo $event['Id']; ?>'">View</button>
+                                <button class="upt-btn" onclick="location.href='updateEvent.php?Id=<?php echo $event['Id']; ?>'">Update</button>
+                                <button class="del-btn" onclick="if(confirm('Are you sure you want to delete this Event?')) location.href='deleteEvent.php?id=<?php echo $event['Id']; ?>'">Delete</button>
                             </td>
                         </tr>
                     <?php endwhile; ?>
-                <?php else: ?>
-                    <tr><td colspan="3">No Events Found</td></tr>
-                <?php endif; ?>
             </tbody>
         </table>
     </div>
